@@ -1,10 +1,13 @@
-
+suppressWarnings(devtools::load_all('../OnlineSuperLearner'))
+library('magrittr')
+library('R.oo')
+library('R.utils')
 algos <- list()
 
-
-algos <- append(algos, list(list(algorithm = 'ML.XGBoost',
-                        algorithm_params = list(alpha = 0),
-                        params = list(nbins = nbins, online = TRUE))))
+nbins <- c(10, 20, 30,40)
+#algos <- append(algos, list(list(algorithm = 'ML.XGBoost',
+                        #algorithm_params = list(alpha = 0),
+                        #params = list(nbins = nbins, online = TRUE))))
 
 #algos <- append(algos, list(list(algorithm = 'ML.H2O.gbm',
                         #algorithm_params = list(ntrees=c(10,20), min_rows=1),
@@ -40,42 +43,72 @@ run_osl <- function(data.train) {
   #A <- RandomVariable$new(formula = A ~ W + Y_lag_1 + A_lag_1 + W_lag_1, family = 'binomial')
 
   # W
-  here_and_now    <- RandomVariable$new(formula = here_and_now ~    , family = 'gaussian')
-  busy            <- RandomVariable$new(formula = busy ~            , family = 'gaussian')
-  special_event_A <- RandomVariable$new(formula = special_event_A ~ , family = 'binomial')
-  special_event_B <- RandomVariable$new(formula = special_event_A ~ , family = 'binomial')
-  special_event_C <- RandomVariable$new(formula = special_event_A ~ , family = 'binomial')
-  special_event_D <- RandomVariable$new(formula = special_event_A ~ , family = 'binomial')
-  humor           <- RandomVariable$new(formula = humor ~           , family = 'gaussian')
-  make_difference <- RandomVariable$new(formula = make_difference ~ , family = 'gaussian')
-  be_outside      <- RandomVariable$new(formula = be_outside ~      , family = 'gaussian')
-  activity_level  <- RandomVariable$new(formula = activity_level ~  , family = 'gaussian')
-  aware           <- RandomVariable$new(formula = aware ~           , family = 'gaussian')
+  W <- c('here_and_now'    ,
+  'busy'            ,
+  'special_event.1' ,
+  'special_event.2' ,
+  'special_event.3' ,
+  'special_event.4' ,
+  'humor'           ,
+  'make_difference' ,
+  'be_outside'      ,
+  'activity_level'  ,
+  'aware') 
+
+  A <- c(
+  'activity.0', 
+  'activity.1', 
+  'activity.2', 
+  'activity.3', 
+  'activity.4', 
+  'activity.5', 
+  'activity.6', 
+  'activity.7', 
+  'activity.8', 
+  'activity.9', 
+  'activity.10', 
+  'activity.11', 
+  'activity.12')
+
+  Y <- c('pa')
+  formulae <- generate_formulae(W,A,Y)
+
+  here_and_now    <- RandomVariable$new(formula = formulae$W$here_and_now    , family = 'gaussian')
+  busy            <- RandomVariable$new(formula = formulae$W$busy            , family = 'gaussian')
+  special_event.1 <- RandomVariable$new(formula = formulae$W$special_event.1 , family = 'binomial')
+  special_event.2 <- RandomVariable$new(formula = formulae$W$special_event.2 , family = 'binomial')
+  special_event.3 <- RandomVariable$new(formula = formulae$W$special_event.3 , family = 'binomial')
+  special_event.4 <- RandomVariable$new(formula = formulae$W$special_event.4 , family = 'binomial')
+  humor           <- RandomVariable$new(formula = formulae$W$humor           , family = 'gaussian')
+  make_difference <- RandomVariable$new(formula = formulae$W$make_difference , family = 'gaussian')
+  be_outside      <- RandomVariable$new(formula = formulae$W$be_outside      , family = 'gaussian')
+  activity_level  <- RandomVariable$new(formula = formulae$W$activity_level  , family = 'gaussian')
+  aware           <- RandomVariable$new(formula = formulae$W$aware           , family = 'gaussian')
 
   # A
-  activity_A      <- RandomVariable$new(formula = activity_A ~ , family = 'binomial')
-  activity_B      <- RandomVariable$new(formula = activity_B ~ , family = 'binomial')
-  activity_C      <- RandomVariable$new(formula = activity_C ~ , family = 'binomial')
-  activity_D      <- RandomVariable$new(formula = activity_D ~ , family = 'binomial')
-  activity_E      <- RandomVariable$new(formula = activity_E ~ , family = 'binomial')
-  activity_F      <- RandomVariable$new(formula = activity_F ~ , family = 'binomial')
-  activity_G      <- RandomVariable$new(formula = activity_G ~ , family = 'binomial')
-  activity_H      <- RandomVariable$new(formula = activity_H ~ , family = 'binomial')
-  activity_I      <- RandomVariable$new(formula = activity_I ~ , family = 'binomial')
-  activity_J      <- RandomVariable$new(formula = activity_J ~ , family = 'binomial')
-  activity_K      <- RandomVariable$new(formula = activity_K ~ , family = 'binomial')
-  activity_L      <- RandomVariable$new(formula = activity_L ~ , family = 'binomial')
-  activity_M      <- RandomVariable$new(formula = activity_M ~ , family = 'binomial')
+  activity.0       <- RandomVariable$new(formula = formulae$A$activity.0      , family = 'binomial')
+  activity.1       <- RandomVariable$new(formula = formulae$A$activity.1      , family = 'binomial')
+  activity.2       <- RandomVariable$new(formula = formulae$A$activity.2      , family = 'binomial')
+  activity.3       <- RandomVariable$new(formula = formulae$A$activity.3      , family = 'binomial')
+  activity.4       <- RandomVariable$new(formula = formulae$A$activity.4      , family = 'binomial')
+  activity.5       <- RandomVariable$new(formula = formulae$A$activity.5      , family = 'binomial')
+  activity.6       <- RandomVariable$new(formula = formulae$A$activity.6      , family = 'binomial')
+  activity.7       <- RandomVariable$new(formula = formulae$A$activity.7      , family = 'binomial')
+  activity.8       <- RandomVariable$new(formula = formulae$A$activity.8      , family = 'binomial')
+  activity.9       <- RandomVariable$new(formula = formulae$A$activity.9      , family = 'binomial')
+  activity.10      <- RandomVariable$new(formula = formulae$A$activity.10     , family = 'binomial')
+  activity.11      <- RandomVariable$new(formula = formulae$A$activity.11     , family = 'binomial')
+  activity.12      <- RandomVariable$new(formula = formulae$A$activity.12     , family = 'binomial')
 
   # Y
-  PA              <- RandomVariable$new(formula = PA ~ , family = 'gaussian')
+  pa              <- RandomVariable$new(formula = formulae$Y$pa              , family = 'gaussian')
 
-  randomVariables <- c(here_and_now, busy, special_event_A, special_event_B, special_event_C,
-                       special_event_D, humor, make_difference, be_outside, activity_level, aware,
-                       activity_A, activity_B, activity_C, activity_D, activity_E, activity_F,
-                       activity_G, activity_H, activity_I, activity_J, activity_K, activity_L,
-                       activity_M,
-                       PA) 
+  randomVariables <- c(here_and_now, busy, special_event.1, special_event.2, special_event.3,
+                       special_event.4, humor, make_difference, be_outside, activity_level, aware,
+                       activity.0, activity.1, activity.2, activity.3, activity.4, activity.5,
+                       activity.6, activity.7, activity.8, activity.9, activity.10, activity.11,
+                       activity.12,
+                       pa) 
 
   # Create the bounds
   bounds <- OnlineSuperLearner::PreProcessor.generate_bounds(data.train)
@@ -84,10 +117,14 @@ run_osl <- function(data.train) {
   # In this simulation we will include 2 lags and the latest data (non lagged)
   # Define the variables in the initial dataset we'd like to use
   #private$train(data.test, data.train, bounds, randomVariables, 2)
-  train(data.train, bounds, randomVariables, PA,  max_iterations = 2)
+  train(data.train, bounds, randomVariables, pa,  max_iterations = 2)
 }
 
 train = function(data.train, bounds, randomVariables, variable_of_interest, max_iterations) {
+
+          doParallel::registerDoParallel(cores = parallel::detectCores())
+
+          log <- Arguments$getVerbose(-8, timestamp=TRUE)
           data.train.static <- Data.Static$new(data.train)
 
           outcome.variables <- sapply(randomVariables, function(rv) rv$getY)
@@ -102,26 +139,22 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
           osl <- OnlineSuperLearner$new(algos,
                                         summaryMeasureGenerator = summaryMeasureGenerator,
                                         pre_processor = pre_processor,
-                                        verbose = FALSE)
+                                        verbose = log)
 
           print('Running OSL')
 
-          mini_batch_size <- (private$training_set_size / 2) / max_iterations
-          mini_batch_size <- ifelse(is.na(mini_batch_size) || is.infinite(mini_batch_size), 1, mini_batch_size)
-
           # Divide by two here just so the initial size is a lot larger then each iteration, not really important
           risk <- osl$fit(data.train.static, randomVariables = randomVariables,
-                          initial_data_size = private$training_set_size / 2,
-                          max_iterations = max_iterations,
-                          mini_batch_size = mini_batch_size) %T>%
+                          initial_data_size = nrow(data.train),
+                          max_iterations = 1,
+                          mini_batch_size = 1) %T>%
             print
 
-
-          private$log && cat(private$log, 'Predicting using all estimators')
+          browser()
 
           # Calculate prediction quality
-          observed.outcome <- data.test[, outcome.variables, with=FALSE]
-          predicted.outcome <- osl$predict(data = copy(data.test), randomVariables, plot= TRUE)
+          #observed.outcome <- data.test[, outcome.variables, with=FALSE]
+          #predicted.outcome <- osl$predict(data = copy(data.test), randomVariables, plot= TRUE)
 
           #performance <- 
             #private$cv_risk_calculator$calculate_evaluation(predicted.outcome = predicted.outcome,
@@ -207,3 +240,61 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
           differences
         }
 
+generate_formulae <- function(W, A, Y){
+  # Generate W Formulae
+  W_form <- lapply(W, function(w) {
+    s <- w
+    first <- TRUE
+    for (w_in in c(W, A, Y)) {
+      lagged <- paste(w_in, '_lag_1', sep='')
+      if(first) s <- paste(s, lagged, sep = ' ~ ')
+      else s <- paste(s, lagged, sep = ' + ')
+      first <- FALSE
+    }
+    first <- TRUE
+    formula(s)
+  })
+  names(W_form) <- W
+
+  A_form <- lapply(A, function(a) {
+    s <- a
+    first <- TRUE
+    for (a_in in c(W, A, Y)) {
+      lagged <- paste(a_in, '_lag_1', sep='')
+      if(first) s <- paste(s, lagged, sep = ' ~ ')
+      else s <- paste(s, lagged, sep = ' + ')
+      first <- FALSE
+    }
+
+    for (a_in in c(W)) {
+      if(first) s <- paste(s, lagged, sep = ' ~ ')
+      else s <- paste(s, a_in, sep = ' + ')
+      first <- FALSE
+    }
+    first <- TRUE
+    formula(s)
+  })
+  names(A_form) <- A
+
+  Y_form <- lapply(Y, function(y) {
+    s <- y
+    first <- TRUE
+    for (y_in in c(W, A, Y)) {
+      lagged <- paste(y_in, '_lag_1', sep='')
+      if(first) s <- paste(s, lagged, sep = ' ~ ')
+      else s <- paste(s, lagged, sep = ' + ')
+      first <- FALSE
+    }
+
+    for (y_in in c(W,A)) {
+      if(first) s <- paste(s, lagged, sep = ' ~ ')
+      else s <- paste(s, y_in, sep = ' + ')
+      first <- FALSE
+    }
+    first <- TRUE
+    formula(s)
+  })
+  names(Y_form) <- Y
+
+  list(W=W_form, A=A_form, Y=Y_form)
+}
