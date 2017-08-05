@@ -2,6 +2,9 @@ suppressWarnings(devtools::load_all('../OnlineSuperLearner'))
 library('magrittr')
 library('R.oo')
 library('R.utils')
+library('parallel')
+library('foreach')
+library('doParallel')
 algos <- list()
 
 nbins <- c(10, 20, 30,40)
@@ -117,12 +120,11 @@ run_osl <- function(data.train) {
   # In this simulation we will include 2 lags and the latest data (non lagged)
   # Define the variables in the initial dataset we'd like to use
   #private$train(data.test, data.train, bounds, randomVariables, 2)
-  train(data.train, bounds, randomVariables, pa,  max_iterations = 2)
+  train(data.train, bounds, randomVariables, pa,  max_iterations = 0, A)
 }
 
-train = function(data.train, bounds, randomVariables, variable_of_interest, max_iterations) {
+train = function(data.train, bounds, randomVariables, variable_of_interest, max_iterations, A) {
 
-          doParallel::registerDoParallel(cores = parallel::detectCores())
 
           log <- Arguments$getVerbose(-8, timestamp=TRUE)
           data.train.static <- Data.Static$new(data.train)
@@ -133,7 +135,9 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
           pre_processor <- PreProcessor$new(bounds = bounds)
           summaryMeasureGenerator <- smg_factory$fabricate(randomVariables, 
                                                            pre_processor = pre_processor,
-                                                           data = data.train.static)
+                                                           data = data.train.static,
+                                                           number_of_observations_per_timeseries = 90
+                                                           )
 
           print('Initializing OSL')
           osl <- OnlineSuperLearner$new(algos,
@@ -145,21 +149,24 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
 
           # Divide by two here just so the initial size is a lot larger then each iteration, not really important
           risk <- osl$fit(data.train.static, randomVariables = randomVariables,
-                          initial_data_size = nrow(data.train),
-                          max_iterations = 1,
+                          initial_data_size = nrow(data.train) - 1,
+                          max_iterations = max_iterations,
                           mini_batch_size = 1) %T>%
             print
 
-          browser()
-
           # Calculate prediction quality
-          #observed.outcome <- data.test[, outcome.variables, with=FALSE]
-          #predicted.outcome <- osl$predict(data = copy(data.test), randomVariables, plot= TRUE)
+          data.train.static$reset
+          summaryMeasureGenerator$reset()
+          data.train.augmented <- summaryMeasureGenerator$getNext(nrow(data.train) - 1)
+          observed.outcome <- data.train.augmented[, outcome.variables, with=FALSE]
+          predicted.outcome <- osl$predict(data = copy(data.train.augmented), randomVariables, plot= TRUE)
 
-          #performance <- 
-            #private$cv_risk_calculator$calculate_evaluation(predicted.outcome = predicted.outcome,
-                                                            #observed.outcome = observed.outcome,
-                                                            #randomVariables = randomVariables) 
+          cv_risk_calculator <- OnlineSuperLearner::CrossValidationRiskCalculator$new()
+
+          performance <- 
+            cv_risk_calculator$calculate_evaluation(predicted.outcome = predicted.outcome,
+                                                            observed.outcome = observed.outcome,
+                                                            randomVariables = randomVariables) 
 
           #OutputPlotGenerator.create_risk_plot(performance, 'performance', '/tmp/osl/')
 
@@ -170,75 +177,87 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
           #plot(x=performances$iterations, y=performances$performance)
           #performances
           # TODO:!!!!!!!!!!!!!!!!!!!!!!!!! THIS SHOULD BE AN INTERVENTION OVER ALL A !!!!!!!!!!!!!!!!
-          intervention <- list(variable = 'A', when = c(2), what = c(1))
-          tau = 2
-          B <- 100
 
-          pre <- options('warn')$warn
+          final_result <- lapply(A, function(a) {
+            intervention <- generate_intervention(A, a, when = 1, what = 1)
+            tau = 2
+            B <- 100
 
-          # Note that this won't work when we have an H2O estimator in the set. The parallelization will fail.
-          O_0 <- data.train[1,]
-          cat('Sampling from Pn* (for approximation)...\n')
-          outcome <- variable_of_interest$getY
+            pre <- options('warn')$warn
 
-
-          result.dosl <- foreach(i=seq(B), .combine=rbind) %dopar% {
-            print(i)
-            osl$sample_iteratively(data = O_0,
-                                   randomVariables = randomVariables,
-                                   intervention = intervention,
-                                   discrete = TRUE,
-                                   tau = tau)[tau, outcome, with=FALSE]
-          } %>%
-            unlist
-
-          result.osl <- foreach(i=seq(B), .combine=rbind) %dopar% {
-            print(i)
-            osl$sample_iteratively(data = O_0,
-                                   randomVariables = randomVariables,
-                                   intervention = intervention,
-                                   return_type = 'observations',
-                                   discrete = FALSE,
-                                   tau = tau)[tau, outcome, with=FALSE]
-          } %>%
-            unlist
+            # Note that this won't work when we have an H2O estimator in the set. The parallelization will fail.
+            O_0 <- data.train.augmented[1,]
+            cat('Sampling from Pn* (for approximation)...\n')
+            outcome <- variable_of_interest$getY
 
 
-          options(warn=pre)
+            result.dosl <- foreach(i=seq(B), .combine=rbind) %dopar% {
+              print(i)
+              osl$sample_iteratively(data = O_0,
+                                    randomVariables = randomVariables,
+                                    intervention = intervention,
+                                    discrete = TRUE,
+                                    tau = tau)[tau, outcome, with=FALSE]
+            } %>%
+              unlist
 
-          result.dosl.mean <- result.dosl %>% mean
-          result.osl.mean <- result.osl %>% mean
+            result.osl <- rep(0.5, B)
+            #result.osl <- foreach(i=seq(B), .combine=rbind) %dopar% {
+              #print(i)
+              #osl$sample_iteratively(data = O_0,
+                                    #randomVariables = randomVariables,
+                                    #intervention = intervention,
+                                    #return_type = 'observations',
+                                    #discrete = FALSE,
+                                    #tau = tau)[tau, outcome, with=FALSE]
+            #} %>%
+              #unlist
 
-          # Plot the convergence
-          data <- list(dosl = result.dosl, osl = result.osl)
-          OnlineSuperLearner::OutputPlotGenerator.create_convergence_plot(data = data,
-                                                                          output = paste('convergence_configuration',
-                                                                                         1,sep='_'))
 
-          #browser()
-          osl$info
+            options(warn=pre)
+
+            result.dosl.mean <- result.dosl %>% mean
+            result.osl.mean <- result.osl %>% mean
+
+            # Plot the convergence
+            data <- list(dosl = result.dosl, osl = result.osl)
+            OnlineSuperLearner::OutputPlotGenerator.create_convergence_plot(data = data,
+                                                                            output = paste('convergence_configuration',
+                                                                                          a,sep='_'))
+
+            result.dosl.mean
+          })
+          names(final_result) <- A
+          print(final_result)
 
           #lapply(performance, function(x) {lapply(x,mean)})
 
           # Now, the fimal step is to apply the OneStepEstimator
-          OOS <- OnlineSuperLearner::OneStepEstimator$new(osl = osl, 
-                                                          randomVariables = randomVariables, 
-                                                          discrete = TRUE,
-                                                          N = 90, 
-                                                          B = B,
-                                                          pre_processor = pre_processor
-                                                          )
+          #OOS <- OnlineSuperLearner::OneStepEstimator$new(osl = osl, 
+                                                          #randomVariables = randomVariables, 
+                                                          #discrete = TRUE,
+                                                          #N = 90, 
+                                                          #B = B,
+                                                          #pre_processor = pre_processor
+                                                          #)
 
-          result.approx.mean.updated <- OOS$perform(initial_estimate = result.dosl.mean,
-                                                   data = data.test,
-                                                   variable_of_interest = variable_of_interest,
-                                                   intervention = intervention,
-                                                   tau = tau)
+          #result.approx.mean.updated <- OOS$perform(initial_estimate = result.dosl.mean,
+                                                   #data = data.test,
+                                                   #variable_of_interest = variable_of_interest,
+                                                   #intervention = intervention,
+                                                   #tau = tau)
 
-          print(paste('The difference between the estimate and approximation (after oos) for dosl is: ',
-                      abs(result.approx.mean - result.approx.mean.updated$oos_estimate)))
-          differences
+          #print(paste('The difference between the estimate and approximation (after oos) for dosl is: ',
+                      #abs(result.approx.mean - result.approx.mean.updated$oos_estimate)))
+          #differences
         }
+
+generate_intervention <- function(A, A_int, when, what) {
+  what <- lapply(A, function(a) {
+    ifelse(a == A_int, what, 1 - what) 
+  }) %>% unlist
+  list(variable = A, when = rep(when, length(A)), what = what)
+}
 
 generate_formulae <- function(W, A, Y){
   # Generate W Formulae
@@ -286,11 +305,11 @@ generate_formulae <- function(W, A, Y){
       first <- FALSE
     }
 
-    for (y_in in c(W,A)) {
-      if(first) s <- paste(s, lagged, sep = ' ~ ')
-      else s <- paste(s, y_in, sep = ' + ')
-      first <- FALSE
-    }
+    #for (y_in in c(W,A)) {
+      #if(first) s <- paste(s, lagged, sep = ' ~ ')
+      #else s <- paste(s, y_in, sep = ' + ')
+      #first <- FALSE
+    #}
     first <- TRUE
     formula(s)
   })

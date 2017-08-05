@@ -12,6 +12,8 @@ set.seed(12345)
 data_file <- "mad_diary_update19feb2015_merge.csv"
 categorical_columns <- c('activity', 'special_event')
 
+doParallel::registerDoParallel(cores = parallel::detectCores())
+
 # Create the separate CSVs for each individual
 #create_csvs(data_file=data_file)
 

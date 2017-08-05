@@ -1,6 +1,8 @@
 store_imputed_data = function() {
   setwd('csv_imputed')
   files <- list.files()
+  warning('Only using data1')
+  #files <- files[10]
   i <- 0
   imputed_data <- lapply(files, fread)
 
