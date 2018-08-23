@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 # Ade4 is needed for the one hot encoding
+#install.packages('ade4')
+#devtools::install_github('roqua/autovar')
 library('ade4')
 library('data.table')
 
@@ -10,17 +12,18 @@ source('run_osl.R')
 
 set.seed(12345)
 data_file <- "mad_diary_update19feb2015_merge.csv"
-categorical_columns <- c('activity', 'special_event')
+categorical_columns <- c('activity', 'special_event', 'busy')
+dont_scale <- 'id'
 
 doParallel::registerDoParallel(cores = parallel::detectCores())
 
 # Create the separate CSVs for each individual
-#create_csvs(data_file=data_file)
+create_csvs(data_file=data_file)
 
 # Load and impute the separate data 
 
 # Store all imputed people in a new datatable
-#impute_all_files()
+impute_all_files()
 store_imputed_data()
 
 # Recode the activity values to 0 / 1
@@ -35,21 +38,31 @@ for (name in names_to_remove) {
 imputed_data[,(categorical_columns) := round(.SD,0), .SDcols=categorical_columns]
 
 ## TODO: Fix this:  Set any NA that are still in the DT to 0
-for (i in names(imputed_data))
-  imputed_data[is.na(get(i)), (i):=0]
+for (i in names(imputed_data)) {
+  if(i %in% dont_scale) next
+  imputed_data[is.na(get(i)), (i):= 0]
+  imputed_data[ , (i) := lapply(.SD, max, 0L), .SDcols = (i),  by = 1:nrow(imputed_data)]
+  imputed_data[ , (i) := lapply(.SD, min, 100L), .SDcols = (i),  by = 1:nrow(imputed_data)]
+}
 
 # TODO: Fix this:
 imputed_data[ , 'special_event' := lapply(.SD, max, 1), .SDcols = 'special_event',  by = 1:nrow(imputed_data)]
 imputed_data[ , 'special_event' := lapply(.SD, min, 4), .SDcols = 'special_event',  by = 1:nrow(imputed_data)]
 imputed_data[ , 'activity' := lapply(.SD, max, 0), .SDcols = 'activity',  by = 1:nrow(imputed_data)]
 imputed_data[ , 'activity' := lapply(.SD, min, 12), .SDcols = 'activity',  by = 1:nrow(imputed_data)]
+imputed_data[ , 'busy' := lapply(.SD, max, 1), .SDcols = 'busy',  by = 1:nrow(imputed_data)]
+imputed_data[ , 'busy' := lapply(.SD, min, 5), .SDcols = 'busy',  by = 1:nrow(imputed_data)]
 
 
+# Create categorical dummies
 for (col in categorical_columns) {
   imputed_data_dummy = acm.disjonctif(imputed_data[,col, with=FALSE])
   imputed_data[,col] = NULL
   imputed_data = cbind(imputed_data, imputed_data_dummy)
 }
+
+# TODO: Fix this: There are negative values after the imputation.
+imputed_data <- abs(imputed_data)
 
 run_osl(imputed_data)
 

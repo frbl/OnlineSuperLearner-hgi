@@ -112,6 +112,10 @@ simple_avg <- function(measurement) {
   my_list$activity             <- as.numeric(get_value(measurement, names$wat_deed_ik)) 
   my_list$aware                <- as.numeric(get_value(measurement, names$ik_deed_dingen_op_de_automatische_piloot_zonder_me_bewust_te_zijn_van_wat_ik_deed))
 
+  # 1 = male, 0 = female
+  my_list$gender               <- as.numeric(measurement['sex'])
+  my_list$age                  <- as.numeric(measurement['age'])
+
   my_list
 
 }
@@ -228,7 +232,10 @@ create_csvs <- function(data_file, ids_to_keep = NULL) {
   mclapply(seq_along(data.splitted), function(i) {
     current <- data.splitted[[i]]
     id <- current$id[1]
-    if(!is.na(id) && nrow(data.splitted[[i]]) >= minimal_measurement_count && valid_id(id, ids_to_keep)) {
+    valid_measurements <- nrow(current)
+    valid_measurements <- sum(!is.na(current$mad_diary_31))
+
+    if(!is.na(id) && valid_measurements >= minimal_measurement_count && valid_id(id, ids_to_keep)) {
       converted_data = convert_data(current)
       # NaNs in the dataframe will be handled gracefully and are converted to NAs.
       write.csv(converted_data, file = paste(id, "csv", sep="."))

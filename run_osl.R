@@ -5,12 +5,20 @@ library('R.utils')
 library('parallel')
 library('foreach')
 library('doParallel')
+
+nbins <- c(20, 30, 40, 50)#, 60, 70)
 algos <- list()
 
-nbins <- c(10, 20, 30,40)
-#algos <- append(algos, list(list(algorithm = 'ML.XGBoost',
-                        #algorithm_params = list(alpha = 0),
-                        #params = list(nbins = nbins, online = TRUE))))
+
+nbins <- c(40, 50, 60, 70)
+algos <- list()
+
+
+alphas <- runif(3,0,1)
+alphas <- c(0, alphas)
+algos <- append(algos, list(list(algorithm = 'ML.XGBoost',
+                        algorithm_params = list(alpha = alphas), 
+                        params = list(nbins = nbins, online = FALSE))))
 
 #algos <- append(algos, list(list(algorithm = 'ML.H2O.gbm',
                         #algorithm_params = list(ntrees=c(10,20), min_rows=1),
@@ -20,16 +28,24 @@ nbins <- c(10, 20, 30,40)
                         #algorithm_params = list(ntrees=c(10,20)),
                         #params = list(nbins = nbins, online = TRUE))))
 
-#algos <- append(algos, list(list(algorithm = 'condensier::speedglmR6',
+#algos <- append(algos, list(list(algorithm = 'ML.SVM',
                         ##algorithm_params = list(),
-                        #params = list(nbins = c(39, 40), online = FALSE))))
+                        #params = list(nbins = nbins, online = FALSE))))
+
+#algos <- append(algos, list(list(algorithm = 'ML.NeuralNet',
+                        ###algorithm_params = list(),
+                        #params = list(nbins = nbins, online = TRUE))))
+
+algos <- append(algos, list(list(algorithm = 'ML.randomForest',
+                        algorithm_params = list(ntrees=c(500,1000)),
+                        params = list(nbins = nbins, online = FALSE))))
 
 algos <- append(algos, list(list(algorithm = 'ML.Local.Speedlm',
                         #algorithm_params = list(),
                         params = list(nbins = nbins, online = FALSE))))
 
 #algos <- append(algos, list(list(algorithm = 'ML.GLMnet',
-                        #algorithm_params = list(alpha = c(0.3,0.8)),
+                        ##algorithm_params = list(alpha = alphas),
                         #params = list(nbins = nbins, online = FALSE))))
 
 #algos <- append(algos, list(list(algorithm = 'condensier::glmR6',
@@ -42,24 +58,27 @@ run_osl <- function(data.train) {
   set.seed(12345)
 
   # We'd like to use the following features in our estimation:
-  #W1 <- RandomVariable$new(formula = W ~ Y_lag_1 + A_lag_1 +  W_lag_1 + Y_lag_2, family = 'gaussian')
-  #A <- RandomVariable$new(formula = A ~ W + Y_lag_1 + A_lag_1 + W_lag_1, family = 'binomial')
-
-  # W
-  W <- c('here_and_now'    ,
-  'busy'            ,
-  'special_event.1' ,
-  'special_event.2' ,
-  'special_event.3' ,
-  'special_event.4' ,
-  'humor'           ,
-  'make_difference' ,
-  'be_outside'      ,
-  'activity_level'  ,
-  'aware') 
+  W <- c(
+  'here_and_now',
+  'age',
+  'gender',
+  ## 'busy.1'          ,
+  'busy.2',
+  'busy.3',
+  'busy.4',
+  'busy.5',
+  ## 'special_event.1' ,
+  'special_event.2',
+  'special_event.3',
+  'special_event.4',
+  'humor',
+  'make_difference',
+  'be_outside',
+  'activity_level',
+  'aware', 'id') 
 
   A <- c(
-  'activity.0', 
+  ## 'activity.0', 
   'activity.1', 
   'activity.2', 
   'activity.3', 
@@ -74,11 +93,24 @@ run_osl <- function(data.train) {
   'activity.12')
 
   Y <- c('pa')
+
+  ## Note that we removed special_event.1 and activity.0, as including these in
+  ## the model would introduce a multicolliniar system. These are loaded on the
+  ## intercept term.
+  ## TODO: Check if indeed all algorithms include an intercept. If not, we should include it manually here.
+
+
   formulae <- generate_formulae(W,A,Y)
 
+  age             <- RandomVariable$new(formula = formulae$W$age             , family = 'gaussian')
+  gender          <- RandomVariable$new(formula = formulae$W$gender          , family = 'binomial')
   here_and_now    <- RandomVariable$new(formula = formulae$W$here_and_now    , family = 'gaussian')
-  busy            <- RandomVariable$new(formula = formulae$W$busy            , family = 'gaussian')
-  special_event.1 <- RandomVariable$new(formula = formulae$W$special_event.1 , family = 'binomial')
+  #busy.1          <- RandomVariable$new(formula = formulae$W$busy.1            , family = 'binomial')
+  busy.2          <- RandomVariable$new(formula = formulae$W$busy.2          , family = 'binomial')
+  busy.3          <- RandomVariable$new(formula = formulae$W$busy.3          , family = 'binomial')
+  busy.4          <- RandomVariable$new(formula = formulae$W$busy.4          , family = 'binomial')
+  busy.5          <- RandomVariable$new(formula = formulae$W$busy.5          , family = 'binomial')
+  #special_event.1 <- RandomVariable$new(formula = formulae$W$special_event.1 , family = 'binomial')
   special_event.2 <- RandomVariable$new(formula = formulae$W$special_event.2 , family = 'binomial')
   special_event.3 <- RandomVariable$new(formula = formulae$W$special_event.3 , family = 'binomial')
   special_event.4 <- RandomVariable$new(formula = formulae$W$special_event.4 , family = 'binomial')
@@ -89,7 +121,7 @@ run_osl <- function(data.train) {
   aware           <- RandomVariable$new(formula = formulae$W$aware           , family = 'gaussian')
 
   # A
-  activity.0       <- RandomVariable$new(formula = formulae$A$activity.0      , family = 'binomial')
+  #activity.0       <- RandomVariable$new(formula = formulae$A$activity.0      , family = 'binomial')
   activity.1       <- RandomVariable$new(formula = formulae$A$activity.1      , family = 'binomial')
   activity.2       <- RandomVariable$new(formula = formulae$A$activity.2      , family = 'binomial')
   activity.3       <- RandomVariable$new(formula = formulae$A$activity.3      , family = 'binomial')
@@ -106,10 +138,31 @@ run_osl <- function(data.train) {
   # Y
   pa              <- RandomVariable$new(formula = formulae$Y$pa              , family = 'gaussian')
 
-  randomVariables <- c(here_and_now, busy, special_event.1, special_event.2, special_event.3,
-                       special_event.4, humor, make_difference, be_outside, activity_level, aware,
-                       activity.0, activity.1, activity.2, activity.3, activity.4, activity.5,
-                       activity.6, activity.7, activity.8, activity.9, activity.10, activity.11,
+  randomVariables <- c(here_and_now, 
+                       gender,
+                       age,
+                       #busy.1, 
+                       busy.2, 
+                       busy.3, 
+                       busy.4, 
+                       busy.5, 
+                       #special_event.1, 
+                       special_event.2, 
+                       special_event.3,
+                       special_event.4, 
+                       humor, make_difference, be_outside, activity_level, aware,
+                       #activity.0, 
+                       activity.1, 
+                       activity.2,
+                       activity.3, 
+                       activity.4,
+                       activity.5,
+                       activity.6, 
+                       activity.7, 
+                       activity.8, 
+                       activity.9,
+                       activity.10, 
+                       activity.11,
                        activity.12,
                        pa) 
 
@@ -149,9 +202,11 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
 
           # Divide by two here just so the initial size is a lot larger then each iteration, not really important
           risk <- osl$fit(data.train.static, randomVariables = randomVariables,
-                          initial_data_size = nrow(data.train) - 1,
-                          max_iterations = max_iterations,
-                          mini_batch_size = 1) %T>%
+                          #initial_data_size = 89,
+                          initial_data_size = 500,
+                          max_iterations = (nrow(data.train) / 90),
+                          mini_batch_size = 500) %T>%
+                          #mini_batch_size = 89) %T>%
             print
 
           # Calculate prediction quality
@@ -176,11 +231,15 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
 
           #plot(x=performances$iterations, y=performances$performance)
           #performances
-          # TODO:!!!!!!!!!!!!!!!!!!!!!!!!! THIS SHOULD BE AN INTERVENTION OVER ALL A !!!!!!!!!!!!!!!!
-
+          A <- append(A, 'activity.0')
+          
           final_result <- lapply(A, function(a) {
-            intervention <- generate_intervention(A, a, when = 1, what = 1)
-            tau = 2
+            if (a == 'activity.0') {
+              intervention <- OnlineSuperLearner::InterventionParser.generate_intervention(A, NULL, when = 2, what = 1)
+            } else {
+              intervention <- OnlineSuperLearner::InterventionParser.generate_intervention(A, a, when = 2, what = 1)
+            }
+            tau <- 3
             B <- 100
 
             pre <- options('warn')$warn
@@ -201,17 +260,16 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
             } %>%
               unlist
 
-            result.osl <- rep(0.5, B)
-            #result.osl <- foreach(i=seq(B), .combine=rbind) %dopar% {
-              #print(i)
-              #osl$sample_iteratively(data = O_0,
-                                    #randomVariables = randomVariables,
-                                    #intervention = intervention,
-                                    #return_type = 'observations',
-                                    #discrete = FALSE,
-                                    #tau = tau)[tau, outcome, with=FALSE]
-            #} %>%
-              #unlist
+            result.osl <- foreach(i=seq(B), .combine=rbind) %dopar% {
+              print(i)
+              osl$sample_iteratively(data = O_0,
+                                    randomVariables = randomVariables,
+                                    intervention = intervention,
+                                    return_type = 'observations',
+                                    discrete = FALSE,
+                                    tau = tau)[tau, outcome, with=FALSE]
+            } %>%
+              unlist
 
 
             options(warn=pre)
@@ -221,14 +279,35 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
 
             # Plot the convergence
             data <- list(dosl = result.dosl, osl = result.osl)
+            print(data)
             OnlineSuperLearner::OutputPlotGenerator.create_convergence_plot(data = data,
+                                                                            dir = '~/tmp/hgi',
                                                                             output = paste('convergence_configuration',
-                                                                                          a,sep='_'))
+                                                                            a,sep='_'))
 
-            result.dosl.mean
+            list(dosl.mean = result.dosl.mean, osl.mean = result.osl.mean)
           })
+
           names(final_result) <- A
-          print(final_result)
+
+          for (act in A) {
+            key <- paste(act,'dosl-pre-oos', sep='-')
+            OnlineSuperLearner::OutputPlotGenerator.export_key_value(key = key, 
+                                                                     dir = '~/tmp/hgi',
+                                                                     value = round(as.numeric(final_result[[act]]$dosl.mean),2))
+            key <- paste(act,'osl-pre-oos', sep='-')
+            OnlineSuperLearner::OutputPlotGenerator.export_key_value(key = key, 
+                                                                     dir = '~/tmp/hgi',
+                                                                     value = round(as.numeric(final_result[[act]]$osl.mean),2))
+          }
+
+          key_performance = 'risk_cv_summary_cfg_act'
+          OutputPlotGenerator.create_risk_plot(performance=osl$get_cv_risk, 
+                                               output=key_performance, make_summary=TRUE, 
+                                               dir = '~/tmp/hgi',
+                                               label='total.risk')
+
+          
 
           #lapply(performance, function(x) {lapply(x,mean)})
 
@@ -251,13 +330,6 @@ train = function(data.train, bounds, randomVariables, variable_of_interest, max_
                       #abs(result.approx.mean - result.approx.mean.updated$oos_estimate)))
           #differences
         }
-
-generate_intervention <- function(A, A_int, when, what) {
-  what <- lapply(A, function(a) {
-    ifelse(a == A_int, what, 1 - what) 
-  }) %>% unlist
-  list(variable = A, when = rep(when, length(A)), what = what)
-}
 
 generate_formulae <- function(W, A, Y){
   # Generate W Formulae
